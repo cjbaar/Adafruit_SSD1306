@@ -3,7 +3,9 @@
 
 ## Mod for "3-wire" SPI
 Some SPI versions of the SSD1306 display can be used without the DC line, eliminating an output pin. This currently only works with the custom (bit-bang) SPI method, since it requires sending of 9-bit packets instead of 8. To use, call the constructor without the DC argument.
+
 ```Adafruit_SSD1306 display(OLED_MOSI, OLED_CLK, OLED_RESET, OLED_CS);```
+
 This mod also allows you to pass -1 as a value for OLED_CS, if you have only one SPI device and are not using the CS line.
 
 ## Compatibility
