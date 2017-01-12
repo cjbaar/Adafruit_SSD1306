@@ -150,6 +150,17 @@ Adafruit_SSD1306::Adafruit_SSD1306(int8_t SID, int8_t SCLK, int8_t DC, int8_t RS
   hwSPI = false;
 }
 
+// "3-wire SPI", does not need DC line
+Adafruit_SSD1306::Adafruit_SSD1306(int8_t SID, int8_t SCLK, int8_t RST, int8_t CS) : Adafruit_GFX(SSD1306_LCDWIDTH, SSD1306_LCDHEIGHT) {
+  cs = CS;
+  rst = RST;
+  dc = -1;
+  sclk = SCLK;
+  sid = SID;
+  hwSPI = false;
+  spimsb = 0x100;
+}
+
 // constructor for hardware SPI - we indicate DataCommand, ChipSelect, Reset
 Adafruit_SSD1306::Adafruit_SSD1306(int8_t DC, int8_t RST, int8_t CS) : Adafruit_GFX(SSD1306_LCDWIDTH, SSD1306_LCDHEIGHT) {
   dc = DC;
@@ -172,13 +183,21 @@ void Adafruit_SSD1306::begin(uint8_t vccstate, uint8_t i2caddr, bool reset) {
 
   // set pin directions
   if (sid != -1){
-    pinMode(dc, OUTPUT);
-    pinMode(cs, OUTPUT);
+  	if (dc != -1) {
+	    pinMode(dc, OUTPUT);
+	}
+	if (cs != -1) {
+	    pinMode(cs, OUTPUT);
+	}
 #ifdef HAVE_PORTREG
-    csport      = portOutputRegister(digitalPinToPort(cs));
-    cspinmask   = digitalPinToBitMask(cs);
-    dcport      = portOutputRegister(digitalPinToPort(dc));
-    dcpinmask   = digitalPinToBitMask(dc);
+	if (cs != -1) {
+    	csport      = portOutputRegister(digitalPinToPort(cs));
+    	cspinmask   = digitalPinToBitMask(cs);
+    }
+  	if (dc != -1) {
+	    dcport      = portOutputRegister(digitalPinToPort(dc));
+    	dcpinmask   = digitalPinToBitMask(dc);
+    }
 #endif
     if (!hwSPI){
       // set pins for software-SPI
@@ -301,19 +320,35 @@ void Adafruit_SSD1306::ssd1306_command(uint8_t c) {
   {
     // SPI
 #ifdef HAVE_PORTREG
-    *csport |= cspinmask;
-    *dcport &= ~dcpinmask;
-    *csport &= ~cspinmask;
+	if (cs != -1) {
+	    *csport |= cspinmask;
+	}
+  	if (dc != -1) {
+	    *dcport &= ~dcpinmask;
+	}
+	if (cs != -1) {
+    	*csport &= ~cspinmask;
+    }
 #else
-    digitalWrite(cs, HIGH);
-    digitalWrite(dc, LOW);
-    digitalWrite(cs, LOW);
+	if (cs != -1) {
+    	digitalWrite(cs, HIGH);
+    }
+  	if (dc != -1) {
+    	digitalWrite(dc, LOW);
+    }
+	if (cs != -1) {
+    	digitalWrite(cs, LOW);
+    }
 #endif
-    fastSPIwrite(c);
+    fastSPIwrite(c, 0);
 #ifdef HAVE_PORTREG
-    *csport |= cspinmask;
+	if (cs != -1) {
+	    *csport |= cspinmask;
+	}
 #else
-    digitalWrite(cs, HIGH);
+	if (cs != -1) {
+	    digitalWrite(cs, HIGH);
+	}
 #endif
   }
   else
@@ -437,22 +472,38 @@ void Adafruit_SSD1306::display(void) {
   {
     // SPI
 #ifdef HAVE_PORTREG
-    *csport |= cspinmask;
-    *dcport |= dcpinmask;
-    *csport &= ~cspinmask;
+	if (cs != -1) {
+	    *csport |= cspinmask;
+  	}
+  	if (dc != -1) {
+    	*dcport |= dcpinmask;
+    }
+	if (cs != -1) {
+	    *csport &= ~cspinmask;
+	}
 #else
-    digitalWrite(cs, HIGH);
-    digitalWrite(dc, HIGH);
-    digitalWrite(cs, LOW);
+	if (cs != -1) {
+	    digitalWrite(cs, HIGH);
+  	}
+  	if (dc != -1) {
+    	digitalWrite(dc, HIGH);
+    }
+	if (cs != -1) {
+    	digitalWrite(cs, LOW);
+	}
 #endif
 
     for (uint16_t i=0; i<(SSD1306_LCDWIDTH*SSD1306_LCDHEIGHT/8); i++) {
-      fastSPIwrite(buffer[i]);
+      fastSPIwrite(buffer[i], 1);
     }
 #ifdef HAVE_PORTREG
-    *csport |= cspinmask;
+ 	if (cs != -1) {
+	   *csport |= cspinmask;
+	}
 #else
-    digitalWrite(cs, HIGH);
+	if (cs != -1) {
+	    digitalWrite(cs, HIGH);
+	}
 #endif
   }
   else
@@ -490,12 +541,15 @@ void Adafruit_SSD1306::clearDisplay(void) {
 }
 
 
-inline void Adafruit_SSD1306::fastSPIwrite(uint8_t d) {
+inline void Adafruit_SSD1306::fastSPIwrite(uint16_t d, uint8_t dis) {
+  if (dc == -1  &&  dis > 0) {
+  	d |= 0x100;
+  }
 
   if(hwSPI) {
     (void)SPI.transfer(d);
   } else {
-    for(uint8_t bit = 0x80; bit; bit >>= 1) {
+    for(uint16_t bit = spimsb; bit; bit >>= 1) {
 #ifdef HAVE_PORTREG
       *clkport &= ~clkpinmask;
       if(d & bit) *mosiport |=  mosipinmask;
